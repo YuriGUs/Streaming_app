@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // Mantido apenas 1 vez
 import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart'; // NOVO IMPORT
+import 'package:chewie/chewie.dart'; 
 
 class PlayerScreen extends StatefulWidget {
   final int movieId;
@@ -20,25 +21,41 @@ class PlayerScreen extends StatefulWidget {
 
 class _PlayerScreenState extends State<PlayerScreen> {
   late VideoPlayerController _videoPlayerController;
-  ChewieController? _chewieController; // NOVO: O controlador da interface bonita
+  ChewieController? _chewieController;
   bool _hasError = false;
 
   @override
   void initState() {
     super.initState();
     
+    // 👇 PASSO C: DESTRANCA AS ORIENTAÇÕES QUANDO O PLAYER ABRIR 👇
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.portraitDown,
+    ]);
+    
     final videoUrl = Uri.parse(
         'http://10.0.2.2:4000/library/movies/${widget.movieId}/stream?token=${widget.token}');
 
     _videoPlayerController = VideoPlayerController.networkUrl(videoUrl)
       ..initialize().then((_) {
-        // Quando o vídeo carregar, configuramos a interface do Chewie
         _chewieController = ChewieController(
           videoPlayerController: _videoPlayerController,
           autoPlay: true,
           looping: false,
-          allowFullScreen: true, // Habilita o botão de tela cheia
-          allowPlaybackSpeedChanging: true, // Velocidade 1.5x, 2x etc
+
+          deviceOrientationsOnEnterFullScreen: [
+            DeviceOrientation.landscapeLeft,
+            DeviceOrientation.landscapeRight,
+          ],
+          deviceOrientationsAfterFullScreen: [
+            DeviceOrientation.portraitUp,
+          ],
+
+          allowFullScreen: true, 
+          allowPlaybackSpeedChanging: true, 
           errorBuilder: (context, errorMessage) {
             return Center(
               child: Text(errorMessage, style: const TextStyle(color: Colors.white)),
@@ -46,7 +63,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
           },
         );
         
-        setState(() {}); // Atualiza a tela
+        setState(() {}); 
       }).catchError((error) {
         setState(() {
           _hasError = true;
@@ -57,7 +74,11 @@ class _PlayerScreenState extends State<PlayerScreen> {
 
   @override
   void dispose() {
-    // Agora precisamos destruir os DOIS controladores para não vazar memória
+    // 👇 PASSO C: TRANCA TUDO NA VERTICAL DE NOVO NA HORA DE IR EMBORA 👇
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
+
     _videoPlayerController.dispose();
     _chewieController?.dispose();
     super.dispose();
@@ -78,7 +99,6 @@ class _PlayerScreenState extends State<PlayerScreen> {
                 "Erro ao carregar o vídeo.",
                 style: TextStyle(color: Colors.red),
               )
-            // Se o Chewie estiver pronto, mostramos ele!
             : _chewieController != null &&
                     _chewieController!.videoPlayerController.value.isInitialized
                 ? Chewie(

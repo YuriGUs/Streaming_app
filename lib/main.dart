@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/login.dart';
 
-void main() {
+void main() async {
+  // Garante que o motor do Flutter iniciou antes de travar a tela
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
   runApp(const StreamerApp());
 }
 
