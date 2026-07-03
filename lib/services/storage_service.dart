@@ -20,4 +20,15 @@ class StorageService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
   }
+
+  Future<void> saveServerIp(String ip) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('server_ip', ip);
+  }
+
+  Future<String> getServerIp() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Tenta ler o IP salvo. Se não tiver nenhum (primeiro uso), usa o padrão como segurança
+    return prefs.getString('server_ip') ?? '10.0.2.2'; 
+  }
 }

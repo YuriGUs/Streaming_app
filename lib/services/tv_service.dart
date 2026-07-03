@@ -3,12 +3,12 @@ import 'package:http/http.dart' as http;
 import 'storage_service.dart'; // Ajuste o caminho se necessário
 
 class TvService {
-  final String baseUrl = 'http://10.0.2.2:4000';
-
   Future<Map<String, dynamic>> getLiveTv() async {
     final token = await StorageService().getToken();
+    final ip = await StorageService().getServerIp(); // LÊ O IP
+    
     final response = await http.get(
-      Uri.parse('$baseUrl/tv/live'),
+      Uri.parse('http://$ip:4000/tv/live'), // MONTA A URL
       headers: {
         'Authorization': 'Bearer $token',
       },

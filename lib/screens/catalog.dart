@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import '../models/movie.dart';
-import '../services/movie_service.dart';   // Seu serviço de filmes
-import '../services/storage_service.dart'; // Seu serviço de token
-import 'package:flutter/services.dart'; // NOVO: Necessário para controlar a orientação
-import 'player.dart';                       // Sua tela do player
-import 'episodes.dart';                     // A nova tela de episódios
+import '../services/movie_service.dart';
+import '../services/storage_service.dart';
+import 'package:flutter/services.dart';
+import 'player.dart';
+import 'episodes.dart';
 import 'seasons.dart';
 import 'tv_player.dart';
 
@@ -24,11 +24,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
     _loadData();
   }
 
-  
   void _loadData() {
     _initFuture = Future.wait([
       MovieService().getMovies(),
       StorageService().getToken(),
+      StorageService().getServerIp(), // 3º item: Busca o IP
     ]);
   }
 
@@ -42,7 +42,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 2, 
+      length: 2,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Streaming'),
@@ -84,17 +84,16 @@ class _CatalogScreenState extends State<CatalogScreen> {
             }
 
             final movies = snapshot.data![0] as List<Movie>;
-            final token = snapshot.data![1] as String?;
+            final token = snapshot.data![1] as String?; 
+            final ip = snapshot.data![2] as String;   // Pega o IP do Future.wait
 
             if (movies.isEmpty) {
               return const Center(child: Text('Nenhum vídeo na biblioteca.', style: TextStyle(color: Colors.white)));
             }
 
-            // Separa os dados por categoria
             final filmes = movies.where((m) => m.category == 'filme').toList();
             final series = movies.where((m) => m.category == 'serie').toList();
 
-            // Agrupa os episódios das séries por pasta pai
             final Map<String, List<Movie>> groupedSeries = {};
             for (var ep in series) {
               final showName = ep.showTitle ?? 'Série Desconhecida';
@@ -106,11 +105,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
             return TabBarView(
               children: [
-                // Aba de Filmes
-                _buildFilmesGrid(filmes, token),
-
-                // Aba de Séries
-                _buildSeriesGrid(groupedSeries, token),
+                _buildFilmesGrid(filmes, token, ip),
+                _buildSeriesGrid(groupedSeries, token, ip),
               ],
             );
           },
@@ -119,9 +115,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  // --- MÉTODOS AUXILIARES (FICAM ABAIXO DO MÉTODO BUILD, MAS DENTRO DA CLASSE STATE) ---
+  // --- MÉTODOS AUXILIARES ---
 
-  Widget _buildFilmesGrid(List<Movie> filmes, String? token) {
+  Widget _buildFilmesGrid(List<Movie> filmes, String? token, String ip) {
     if (filmes.isEmpty) {
       return RefreshIndicator(
         onRefresh: _refreshData,
@@ -141,7 +137,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
       onRefresh: _refreshData,
       color: Colors.deepPurpleAccent,
       child: GridView.builder(
-        physics: const AlwaysScrollableScrollPhysics(), 
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: 2,
@@ -156,16 +152,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
             title: movie.title,
             thumbnailPath: movie.thumbnailPath,
             token: token,
+            ip: ip, // Passa o IP pro cartão
             onTap: () {
                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => PlayerScreen(
-                      movieId: movie.id,
-                      title: movie.title,
-                      token: token!,
-                    ),
-                  ),
-                );
+                 MaterialPageRoute(
+                   builder: (context) => PlayerScreen(
+                     movieId: movie.id,
+                     title: movie.title,
+                     token: token!,
+                   ),
+                 ),
+               );
             },
           );
         },
@@ -173,9 +170,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  Widget _buildSeriesGrid(Map<String, List<Movie>> groupedSeries, String? token) {
+  Widget _buildSeriesGrid(Map<String, List<Movie>> groupedSeries, String? token, String ip) {
     if (groupedSeries.isEmpty) {
-      // ... (mantenha o RefreshIndicator de lista vazia que já estava aqui)
       return RefreshIndicator(
         onRefresh: _refreshData,
         color: Colors.deepPurpleAccent,
@@ -190,27 +186,21 @@ class _CatalogScreenState extends State<CatalogScreen> {
       );
     }
     
-    // 1. Pegamos os nomes
     final seriesNames = groupedSeries.keys.toList();
 
-    // 2. A MÁGICA DA ORDENAÇÃO NUMÉRICA:
     seriesNames.sort((a, b) {
-      // Usamos Regex (Expressão Regular) para caçar os números no texto
       final regExp = RegExp(r'\d+');
       final matchA = regExp.firstMatch(a);
       final matchB = regExp.firstMatch(b);
 
       if (matchA != null && matchB != null) {
-        // Se achou número nas duas strings, converte para inteiro e compara
         final numA = int.parse(matchA.group(0)!);
         final numB = int.parse(matchB.group(0)!);
         
         if (numA != numB) {
-          return numA.compareTo(numB); // Agora o 2 vem antes do 10!
+          return numA.compareTo(numB); 
         }
       }
-      
-      // Se não tiver números (ex: "Breaking Bad" vs "Arcane"), vai na ordem alfabética
       return a.compareTo(b);
     });
 
@@ -236,15 +226,17 @@ class _CatalogScreenState extends State<CatalogScreen> {
             title: showName, 
             thumbnailPath: firstEpisode.thumbnailPath,
             token: token,
+            ip: ip, // Passa o IP pro cartão
             isSerie: true,
             episodeCount: episodes.length,
             onTap: () {
               Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (context) => SeasonsScreen( // AGORA CHAMA A TELA DE TEMPORADAS
+                  builder: (context) => SeasonsScreen( 
                     showTitle: showName,
                     episodes: episodes,
                     token: token!,
+                    ip: ip,
                   ),
                 ),
               );
@@ -259,6 +251,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     required String title,
     String? thumbnailPath,
     String? token,
+    required String ip, // Recebe o IP como parâmetro obrigatório aqui
     bool isSerie = false,
     int episodeCount = 0,
     required VoidCallback onTap,
@@ -274,7 +267,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
             Container(color: Colors.grey[900]),
             if (thumbnailPath != null && token != null)
               Image.network(
-                'http://10.0.2.2:4000/library/movies/${thumbnailPath.split('/').last.split('.').first}/thumbnail',
+                'http://$ip:4000/library/movies/${thumbnailPath.split('/').last.split('.').first}/thumbnail', // Usa a variável ip aqui
                 headers: {'Authorization': 'Bearer $token'},
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, color: Colors.white24, size: 50)),

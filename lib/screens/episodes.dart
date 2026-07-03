@@ -1,17 +1,19 @@
 import 'package:flutter/material.dart';
 import '../models/movie.dart';
-import 'player.dart'; // Ajuste o import se o nome do seu arquivo do player for diferente
+import 'player.dart';
 
 class EpisodesScreen extends StatelessWidget {
   final String showTitle;
   final List<Movie> episodes;
   final String token;
+  final String ip; // NOVO: A tela agora exige o IP para carregar as imagens!
 
   const EpisodesScreen({
     Key? key,
     required this.showTitle,
     required this.episodes,
     required this.token,
+    required this.ip, // NOVO
   }) : super(key: key);
 
   @override
@@ -33,7 +35,8 @@ class EpisodesScreen extends StatelessWidget {
             contentPadding: const EdgeInsets.all(16),
             leading: ep.thumbnailPath != null
                 ? Image.network(
-                    'http://10.0.2.2:4000/library/movies/${ep.id}/thumbnail',
+                    // 👇 FIX: Agora usa a variável do IP dinâmico 👇
+                    'http://$ip:4000/library/movies/${ep.id}/thumbnail',
                     headers: {'Authorization': 'Bearer $token'},
                     width: 100,
                     fit: BoxFit.cover,
@@ -53,6 +56,8 @@ class EpisodesScreen extends StatelessWidget {
                     movieId: ep.id,
                     title: ep.title,
                     token: token,
+                    // Nota: O PlayerScreen já busca o IP sozinho lá dentro, 
+                    // então não precisamos passar ele aqui de novo!
                   ),
                 ),
               );

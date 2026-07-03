@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart'; // Importamos o serviço
+import '../services/auth_service.dart'; 
 import '../services/storage_service.dart';
 import 'catalog.dart';
 import 'register.dart';
@@ -11,44 +11,60 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+class _CatalogScreenState {}
+
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _ipController = TextEditingController(); // NOVO
   
-  // NOVO: Estado para controlar se o botão está carregando
   bool _isLoading = false;
   String? _errorMessage;
-  // NOVO: Função assíncrona que lida com o clique do botão
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedIp(); // NOVO: Busca o último IP usado para poupar o usuário
+  }
+
+  // NOVO: Preenche o campo de IP automaticamente se houver um histórico
+  Future<void> _loadSavedIp() async {
+    final savedIp = await StorageService().getServerIp();
+    setState(() {
+      _ipController.text = savedIp;
+    });
+  }
+
   Future<void> _handleLogin() async {
     setState(() { _errorMessage = null; });
-    // Esconde o teclado caso esteja aberto
     FocusScope.of(context).unfocus();
 
-    // Validação básica
-    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty) {
+    // Validação básica atualizada
+    if (_usernameController.text.isEmpty || _passwordController.text.isEmpty || _ipController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preencha usuário e senha!')),
+        const SnackBar(content: Text('Preencha usuário, senha e o IP do servidor!')),
       );
       return;
     }
 
-    // Atualiza a tela para mostrar o "carregando"
     setState(() {
       _isLoading = true;
     });
 
     try {
+      // 1. PRIMEIRA ETAPA: Salva o IP digitado no disco IMEDIATAMENTE.
+      // Assim, quando o AuthService for instanciado ali embaixo, ele já lerá o IP novo!
+      await StorageService().saveServerIp(_ipController.text.trim());
+
       final authService = AuthService();
       final token = await authService.login(
-        _usernameController.text,
+        _usernameController.text.trim(),
         _passwordController.text,
       );
 
       if (token != null && mounted) {
-        // 1. Salva o token no disco
         await StorageService().saveToken(token);
         
-        // 2. Notifica sucesso
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Login realizado com sucesso!'),
@@ -56,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
         
-        // 3. Navega para a tela de Catálogo (destruindo a tela de Login)
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const CatalogScreen()),
         );
@@ -68,7 +83,6 @@ class _LoginScreenState extends State<LoginScreen> {
         });
       }
     } finally {
-      // Independentemente de dar certo ou errado, paramos o carregamento
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -81,6 +95,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _ipController.dispose(); // NOVO
     super.dispose();
   }
 
@@ -90,84 +105,91 @@ class _LoginScreenState extends State<LoginScreen> {
       body: Center(
         child: SingleChildScrollView(
           child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 400),
-          child: Padding(
-            padding: const EdgeInsets.all(32.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Icon(Icons.movie_creation_rounded, size: 80, color: Colors.deepPurpleAccent),
-                const SizedBox(height: 32),
-                const Text(
-                  'Rust Streamer',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 32),
-                TextField(
-                  controller: _usernameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Usuário',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
+            constraints: const BoxConstraints(maxWidth: 400),
+            child: Padding(
+              padding: const EdgeInsets.all(32.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Icon(Icons.movie_creation_rounded, size: 80, color: Colors.deepPurpleAccent),
+                  const SizedBox(height: 32),
+                  const Text(
+                    'Rust Streamer',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: _passwordController,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Senha',
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                
-                const SizedBox(height: 32),
-
-                // NOVO: Exibe o erro de forma elegante e não invasiva
-                if (_errorMessage != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16.0),
-                    child: Text(
-                      _errorMessage!,
-                      style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
+                  const SizedBox(height: 32),
+                  
+                  // NOVO: Campo de texto para o IP do servidor
+                  TextField(
+                    controller: _ipController,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'IP do Servidor',
+                      hintText: 'Ex: 192.168.1.50',
+                      prefixIcon: Icon(Icons.dns_rounded),
+                      border: OutlineInputBorder(),
                     ),
                   ),
+                  const SizedBox(height: 16),
 
-                // ATUALIZADO: O botão agora decide o que desenhar baseado no _isLoading
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  TextField(
+                    controller: _usernameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Usuário',
+                      prefixIcon: Icon(Icons.person),
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                  // Se estiver carregando, desativa o botão (passa null pro onPressed)
-                  onPressed: _isLoading ? null : _handleLogin,
-                  child: _isLoading
-                      ? const SizedBox(
-                          height: 24,
-                          width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('ENTRAR', style: TextStyle(fontSize: 16)),
-                ),
-                TextButton(
-                  onPressed: () {
-                    // Navega para a tela de registro por cima da atual
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                    );
-                  },
-                  child: const Text('Não tem uma conta? Cadastre-se'),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Senha',
+                      prefixIcon: Icon(Icons.lock),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  if (_errorMessage != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16.0),
+                      child: Text(
+                        _errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    onPressed: _isLoading ? null : _handleLogin,
+                    child: _isLoading
+                        ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('ENTRAR', style: TextStyle(fontSize: 16)),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                      );
+                    },
+                    child: const Text('Não tem uma conta? Cadastre-se'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      )
-        
       ),
     );
   }

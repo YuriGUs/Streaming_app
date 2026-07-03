@@ -47,8 +47,9 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       });
 
       // 2. Prepara a URL do vídeo
-      final token = await StorageService().getToken(); // Pegue o token como você já faz
-      final videoUrl = 'http://10.0.2.2:4000/library/movies/$movieId/stream';
+      final token = await StorageService().getToken(); 
+      final ip = await StorageService().getServerIp(); // NOVO
+      final videoUrl = 'http://$ip:4000/library/movies/$movieId/stream';
 
       _videoPlayerController = VideoPlayerController.networkUrl(
         Uri.parse(videoUrl),
