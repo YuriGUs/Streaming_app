@@ -5,6 +5,7 @@ import '../services/storage_service.dart'; // Seu serviço de token
 import 'player.dart';                       // Sua tela do player
 import 'episodes.dart';                     // A nova tela de episódios
 import 'seasons.dart';
+import 'tv_player.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({Key? key}) : super(key: key);
@@ -42,8 +43,24 @@ class _CatalogScreenState extends State<CatalogScreen> {
       length: 2, 
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Meu Streaming'),
+          title: const Text('Streaming'),
           backgroundColor: Colors.black87,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: IconButton(
+                icon: const Icon(Icons.live_tv, color: Colors.deepPurpleAccent, size: 28),
+                tooltip: 'Assistir TV Ao Vivo',
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const TvPlayerScreen(),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
           bottom: const TabBar(
             indicatorColor: Colors.deepPurpleAccent,
             tabs: [
