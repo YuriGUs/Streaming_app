@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import '../models/movie.dart';
 import '../services/movie_service.dart';
 import '../services/storage_service.dart';
-import 'package:flutter/services.dart';
 import 'player.dart';
-import 'episodes.dart';
+import 'login.dart';
+
 import 'seasons.dart';
 import 'tv_player.dart';
 
@@ -45,8 +45,26 @@ class _CatalogScreenState extends State<CatalogScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
+          // 1. Centraliza o título
+          centerTitle: true,
           title: const Text('Streaming'),
           backgroundColor: Colors.black87,
+          
+          // 2. Coloca o botão de Sair na esquerda (leading)
+          leading: IconButton(
+            icon: const Icon(Icons.logout, color: Color.fromARGB(255, 126, 27, 27), size: 23),
+            tooltip: 'Sair',
+            onPressed: () async {
+              await StorageService().deleteToken();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacement(
+                  MaterialPageRoute(builder: (context) => const LoginScreen()),
+                );
+              }
+            },
+          ),
+          
+          // 3. Deixa apenas a TV Ao Vivo na direita (actions)
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 8.0),
@@ -88,7 +106,22 @@ class _CatalogScreenState extends State<CatalogScreen> {
             final ip = snapshot.data![2] as String;   // Pega o IP do Future.wait
 
             if (movies.isEmpty) {
-              return const Center(child: Text('Nenhum vídeo na biblioteca.', style: TextStyle(color: Colors.white)));
+              // CORREÇÃO: Envolve a mensagem de lista vazia num ListView para permitir o Refresh
+              return RefreshIndicator(
+                onRefresh: _refreshData,
+                color: Colors.deepPurpleAccent,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: [
+                    SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: const Center(
+                        child: Text('Nenhum vídeo na biblioteca. Puxe para atualizar!', style: TextStyle(color: Colors.white)),
+                      ),
+                    ),
+                  ],
+                ),
+              );
             }
 
             final filmes = movies.where((m) => m.category == 'filme').toList();

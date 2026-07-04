@@ -26,8 +26,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.portraitDown,
     ]);
     _tuneIn();
   }

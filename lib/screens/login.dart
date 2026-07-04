@@ -178,10 +178,18 @@ class _LoginScreenState extends State<LoginScreen> {
                         : const Text('ENTRAR', style: TextStyle(fontSize: 16)),
                   ),
                   TextButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                      );
+                    onPressed: () async {
+                      // 👇 CORREÇÃO: Se o usuário digitou o IP, salvamos no disco antes de ir para o cadastro 👇
+                      if (_ipController.text.isNotEmpty) {
+                        await StorageService().saveServerIp(_ipController.text.trim());
+                      }
+                      
+                      if (mounted) {
+                        // Navega para a tela de registro por cima da atual
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                        );
+                      }
                     },
                     child: const Text('Não tem uma conta? Cadastre-se'),
                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/storage_service.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -11,35 +12,55 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmController = TextEditingController();
-  
+  final TextEditingController _confirmController = TextEditingController(); // VOLTOU: Confirmar senha
+  final TextEditingController _ipController = TextEditingController(); // NOVO: Controlador de IP
+
   bool _isLoading = false;
   String? _errorMessage;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedIp(); 
+  }
+
+  // Busca o IP salvo para já vir preenchido o que ele digitou no login
+  Future<void> _loadSavedIp() async {
+    final savedIp = await StorageService().getServerIp();
+    setState(() {
+      _ipController.text = savedIp;
+    });
+  }
+
   Future<void> _handleRegister() async {
+    setState(() { _errorMessage = null; });
     FocusScope.of(context).unfocus();
 
+    // 1. Verifica se ALGUM dos 4 campos está vazio
     if (_usernameController.text.isEmpty || 
         _passwordController.text.isEmpty || 
-        _confirmController.text.isEmpty) {
-      setState(() => _errorMessage = 'Preencha todos os campos.');
+        _confirmController.text.isEmpty || // Checa a confirmação
+        _ipController.text.isEmpty) {
+      setState(() => _errorMessage = 'Preencha todos os campos, incluindo o IP.');
       return;
     }
 
+    // 2. A SUA VALIDAÇÃO ANTIGA: Verifica se as senhas batem
     if (_passwordController.text != _confirmController.text) {
       setState(() => _errorMessage = 'As senhas não coincidem.');
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+    setState(() { _isLoading = true; });
 
     try {
+      // 3. Salva o IP atualizado no disco antes de disparar o registro
+      await StorageService().saveServerIp(_ipController.text.trim());
+
+      // 4. Chama o serviço de registro 
       final authService = AuthService();
       await authService.register(
-        _usernameController.text,
+        _usernameController.text.trim(),
         _passwordController.text,
       );
 
@@ -50,8 +71,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        // Fecha a tela de registro e volta para a de login
-        Navigator.of(context).pop(); 
+        // Volta para a tela de login
+        Navigator.of(context).pop();
       }
     } catch (e) {
       if (mounted) {
@@ -61,9 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() { _isLoading = false; });
       }
     }
   }
@@ -72,7 +91,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _confirmController.dispose();
+    _confirmController.dispose(); // Não podemos esquecer de descartar esse!
+    _ipController.dispose(); 
     super.dispose();
   }
 
@@ -89,14 +109,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Padding(
-              padding: const EdgeInsets.all(32.0),
+              padding: const EdgeInsets.symmetric(horizontal: 32.0),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const Icon(Icons.person_add_alt_1_rounded, size: 80, color: Colors.deepPurpleAccent),
                   const SizedBox(height: 32),
-                  
+
+                  // CAMPO DO IP
+                  TextField(
+                    controller: _ipController,
+                    keyboardType: TextInputType.url,
+                    decoration: const InputDecoration(
+                      labelText: 'IP do Servidor',
+                      prefixIcon: Icon(Icons.dns_rounded),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
                   TextField(
                     controller: _usernameController,
                     decoration: const InputDecoration(
@@ -106,7 +138,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  
+
                   TextField(
                     controller: _passwordController,
                     obscureText: true,
@@ -118,6 +150,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
 
+                  // VOLTOU: CAMPO DE CONFIRMAR SENHA
                   TextField(
                     controller: _confirmController,
                     obscureText: true,
