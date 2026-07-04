@@ -7,7 +7,6 @@ class ApiClient {
 
   ApiClient() {
     dio = Dio(BaseOptions(
-      baseUrl: 'http://10.0.2.2:4000',
       connectTimeout: const Duration(seconds: 5),
     ));
 
@@ -16,15 +15,15 @@ class ApiClient {
       InterceptorsWrapper(
         // onRequest é executado ANTES da requisição sair para a internet
         onRequest: (options, handler) async {
-          // 1. Lemos o token salvo no disco rígido
-          final token = await StorageService().getToken();
+          // 1. Pega o IP e monta a Base URL
+          final ip = await StorageService().getServerIp();
+          options.baseUrl = 'http://$ip:4000';
 
-          // 2. Se o token existir, injetamos no cabeçalho padrão do HTTP
+          // 2. Lemos o token salvo no disco
+          final token = await StorageService().getToken();
           if (token != null) {
             options.headers['Authorization'] = 'Bearer $token';
           }
-
-          // 3. Liberamos a requisição para seguir seu caminho
           return handler.next(options);
         },
         

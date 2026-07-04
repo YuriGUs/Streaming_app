@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:streamer_app/services/storage_service.dart';
 import 'package:video_player/video_player.dart';
+import 'package:flutter/services.dart';
 import 'package:chewie/chewie.dart';
 import '../services/tv_service.dart';
 
@@ -22,6 +23,10 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _tuneIn();
   }
 
@@ -40,8 +45,9 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       });
 
       // 2. Prepara a URL do vídeo
-      final token = await StorageService().getToken(); // Pegue o token como você já faz
-      final videoUrl = 'http://10.0.2.2:4000/library/movies/$movieId/stream';
+      final token = await StorageService().getToken(); 
+      final ip = await StorageService().getServerIp(); // NOVO
+      final videoUrl = 'http://$ip:4000/library/movies/$movieId/stream';
 
       _videoPlayerController = VideoPlayerController.networkUrl(
         Uri.parse(videoUrl),
@@ -60,7 +66,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
         autoPlay: true,
         looping: false,
         showControls: false, // Na TV, o usuário não pode pausar nem voltar!
-        fullScreenByDefault: true,
       );
 
       setState(() {
@@ -78,6 +83,9 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
 
   @override
   void dispose() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+    ]);
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
     super.dispose();
@@ -87,13 +95,13 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
-      // Removemos a AppBar nativa para o vídeo preencher a tela toda
       body: Center(
         child: _isLoading
             ? const CircularProgressIndicator(color: Colors.deepPurpleAccent)
             : _chewieController != null && _chewieController!.videoPlayerController.value.isInitialized
                 ? GestureDetector(
-                    // Quando clica na tela, inverte a visibilidade do menu
+                    // O GestureDetector volta a abraçar tudo!
+                    behavior: HitTestBehavior.opaque,
                     onTap: () {
                       setState(() {
                         _showOverlay = !_showOverlay;
@@ -102,12 +110,14 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // 1. O VÍDEO NO FUNDO
-                        Chewie(controller: _chewieController!),
+                        // 1. O VÍDEO "AMORDAÇADO"
+                        // O IgnorePointer impede o Chewie de roubar qualquer toque na tela
+                        IgnorePointer(
+                          child: Chewie(controller: _chewieController!),
+                        ),
 
                         // 2. A CAMADA DE CONTROLES CUSTOMIZADA
                         if (_showOverlay) ...[
-                          // Barra superior com botão de voltar e título
                           Positioned(
                             top: 0, left: 0, right: 0,
                             child: Container(
@@ -139,7 +149,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
                                         ),
                                       ),
                                     ),
-                                    // Etiqueta vermelha de "Ao Vivo"
                                     Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                       margin: const EdgeInsets.only(top: 8, right: 16),
@@ -155,7 +164,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
                             ),
                           ),
                           
-                          // Botão de Mutar no canto inferior direito
                           Positioned(
                             bottom: 40, right: 20,
                             child: FloatingActionButton(

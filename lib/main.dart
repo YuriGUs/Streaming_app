@@ -1,7 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'screens/login.dart';
+import 'screens/auth_check.dart';
 
-void main() {
+void main() async {
+  // Garante que o motor do Flutter iniciou antes de travar a tela
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+  ]);
+
   runApp(const StreamerApp());
 }
 
@@ -20,7 +29,7 @@ class StreamerApp extends StatelessWidget {
         colorSchemeSeed: Colors.deepPurple,
       ),
 
-      home: const LoginScreen(),
+      home: const AuthCheck(),
     );
   }
 }

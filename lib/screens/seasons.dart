@@ -6,12 +6,14 @@ class SeasonsScreen extends StatelessWidget {
   final String showTitle;
   final List<Movie> episodes;
   final String token;
+  final String ip; // NOVO: Variável para receber o IP
 
   const SeasonsScreen({
     Key? key,
     required this.showTitle,
     required this.episodes,
     required this.token,
+    required this.ip, // NOVO: Exige o IP no construtor
   }) : super(key: key);
 
   @override
@@ -60,6 +62,7 @@ class SeasonsScreen extends StatelessWidget {
                     showTitle: '$showTitle - Temporada $sNum',
                     episodes: seasonEps,
                     token: token,
+                    ip: ip, // NOVO: Repassa o IP para a tela de episódios!
                   ),
                 ),
               );

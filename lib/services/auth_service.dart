@@ -1,18 +1,26 @@
 import 'package:dio/dio.dart';
+import '../services/storage_service.dart';
 
 class AuthService {
-  // Configuração base do Dio
+  // Configuração base do Dio (removemos a baseUrl fixa daqui)
   final Dio _dio = Dio(BaseOptions(
-    // Como estamos rodando no Windows, 127.0.0.1 aponta para o próprio PC.
-    // (Nota: Se fôssemos rodar no Emulador Android, a rede virtual dele exige que seja 10.0.2.2)
-    baseUrl: 'http://10.0.2.2:4000',
     connectTimeout: const Duration(seconds: 5), // Desiste se o servidor não responder em 5s
   ));
+
+  // NOVO: Método auxiliar que lê o IP salvo e configura no Dio
+  Future<void> _configureDio() async {
+    final ip = await StorageService().getServerIp();
+    // Injeta o IP dinamicamente formando a URL correta
+    _dio.options.baseUrl = 'http://$ip:4000';
+  }
 
   /// Retorna o token JWT se o login for bem-sucedido, ou dispara um erro.
   Future<String?> login(String username, String password) async {
     try {
-      // Fazemos o POST para a rota que criamos no Rust
+      // 1. Configura a URL base com o IP que o usuário digitou agora
+      await _configureDio();
+
+      // 2. Fazemos o POST para a rota que criamos no Rust
       final response = await _dio.post('/auth/login', data: {
         'username': username,
         'password': password,
@@ -36,6 +44,9 @@ class AuthService {
 
   Future<void> register(String username, String password) async {
     try {
+      // 1. Configura a URL base com o IP salvo
+      await _configureDio();
+
       final response = await _dio.post('/auth/register', data: {
         'username': username,
         'password': password,
