@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'screens/login.dart';
 import 'screens/auth_check.dart';
 
 void main() async {

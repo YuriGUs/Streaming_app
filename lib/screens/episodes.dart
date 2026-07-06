@@ -53,11 +53,14 @@ class EpisodesScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => PlayerScreen(
-                    movieId: ep.id,
+                    movieId: ep.id.toInt(),
                     title: ep.title,
                     token: token,
-                    // Nota: O PlayerScreen já busca o IP sozinho lá dentro, 
-                    // então não precisamos passar ele aqui de novo!
+                    
+                    // 👇 OLHA ELAS AQUI! 👇
+                    playlist: episodes,   // Manda a lista inteira de episódios
+                    currentIndex: index,  // Manda o número do episódio clicado (0, 1, 2...)
+                    
                   ),
                 ),
               );

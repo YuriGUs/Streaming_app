@@ -19,6 +19,7 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   String _currentTitle = "Carregando sinal...";
   bool _showOverlay = true;
   bool _isMuted = false;
+  bool _isTransitioning = false; // NOVO: Impede que o app surte e pule dois vídeos
 
   @override
   void initState() {
@@ -31,45 +32,57 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   }
 
   Future<void> _tuneIn() async {
+    setState(() { _isLoading = true; });
+    
+    // Desliga o espião antigo para evitar conflitos de memória
+    _videoPlayerController?.removeListener(_videoEndListener);
+    
     try {
-      // 1. Pergunta ao servidor o que está passando agora
       final tvData = await TvService().getLiveTv();
       final movieId = tvData['movie_id'];
       final offsetSeconds = tvData['offset_seconds'];
 
-      print('📺 TV RECEBEU -> ID: ${tvData['movie_id']} | Pulo: ${tvData['offset_seconds']}s');
-      print('📺 SINTONIZANDO TV: Filme ID $movieId | Pulando para o segundo $offsetSeconds');
-      
+      if (movieId == 0) {
+        setState(() {
+          _currentTitle = "Fora do ar";
+          _isLoading = false;
+        });
+        return; 
+      }
+
       setState(() {
         _currentTitle = tvData['title'] ?? "TV Ao Vivo";
       });
 
-      // 2. Prepara a URL do vídeo
       final token = await StorageService().getToken(); 
-      final ip = await StorageService().getServerIp(); // NOVO
-      final videoUrl = 'http://$ip:4000/library/movies/$movieId/stream';
+      final ip = await StorageService().getServerIp(); 
+      final videoUrl = 'http://$ip:4000/library/movies/$movieId/stream?token=$token';
 
-      _videoPlayerController = VideoPlayerController.networkUrl(
-        Uri.parse(videoUrl),
-        httpHeaders: {'Authorization': 'Bearer $token'},
-      );
+      // Guarda os players antigos para destruí-los depois, mantendo a tela preta lisa
+      final oldVideoController = _videoPlayerController;
+      final oldChewieController = _chewieController;
 
-      // 3. Inicializa o vídeo
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
       await _videoPlayerController!.initialize();
-
-      // 4. O PULO DO GATO DA TV: Pula para o tempo exato que o servidor mandou!
       await _videoPlayerController!.seekTo(Duration(seconds: offsetSeconds));
 
-      // 5. Configura o player da interface (escondemos os controles para dar mais cara de TV)
+      // 🌟 O NOVO ESPIÃO DA TV: Fica monitorando quando o programa vai acabar
+      _videoPlayerController!.addListener(_videoEndListener);
+
       _chewieController = ChewieController(
         videoPlayerController: _videoPlayerController!,
         autoPlay: true,
         looping: false,
-        showControls: false, // Na TV, o usuário não pode pausar nem voltar!
+        showControls: false, 
       );
+
+      // Limpa os reprodutores antigos
+      oldChewieController?.dispose();
+      oldVideoController?.dispose();
 
       setState(() {
         _isLoading = false;
+        _isTransitioning = false;
       });
       
     } catch (e) {
@@ -81,11 +94,31 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
     }
   }
 
+  // 🌟 AÇÃO AO FIM DO VÍDEO
+  void _videoEndListener() {
+    if (_videoPlayerController == null || !_videoPlayerController!.value.isInitialized || _isTransitioning) {
+      return;
+    }
+
+    final position = _videoPlayerController!.value.position;
+    final duration = _videoPlayerController!.value.duration;
+
+    // Se faltar 1 segundo para acabar...
+    if (position > Duration.zero && position >= (duration - const Duration(seconds: 1))) {
+      _isTransitioning = true; 
+      _videoPlayerController!.removeListener(_videoEndListener);
+      
+      // Sintoniza a TV novamente em segundo plano!
+      _tuneIn(); 
+    }
+  }
+
   @override
   void dispose() {
     SystemChrome.setPreferredOrientations([
       DeviceOrientation.portraitUp,
     ]);
+    _videoPlayerController?.removeListener(_videoEndListener);
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
     super.dispose();
@@ -100,7 +133,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
             ? const CircularProgressIndicator(color: Colors.deepPurpleAccent)
             : _chewieController != null && _chewieController!.videoPlayerController.value.isInitialized
                 ? GestureDetector(
-                    // O GestureDetector volta a abraçar tudo!
                     behavior: HitTestBehavior.opaque,
                     onTap: () {
                       setState(() {
@@ -110,13 +142,10 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // 1. O VÍDEO "AMORDAÇADO"
-                        // O IgnorePointer impede o Chewie de roubar qualquer toque na tela
                         IgnorePointer(
                           child: Chewie(controller: _chewieController!),
                         ),
 
-                        // 2. A CAMADA DE CONTROLES CUSTOMIZADA
                         if (_showOverlay) ...[
                           Positioned(
                             top: 0, left: 0, right: 0,
