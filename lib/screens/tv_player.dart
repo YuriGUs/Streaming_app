@@ -18,8 +18,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   bool _isLoading = true;
   String _currentTitle = "Carregando sinal...";
   bool _showOverlay = true;
-  bool _isMuted = false;
-  bool _isTransitioning = false; // NOVO: Impede que o app surte e pule dois vídeos
 
   @override
   void initState() {
@@ -32,9 +30,11 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
   }
 
   Future<void> _tuneIn() async {
-    setState(() { _isLoading = true; });
+    setState(() { 
+      _isLoading = true; 
+      _showOverlay = true; 
+    });
     
-    // Desliga o espião antigo para evitar conflitos de memória
     _videoPlayerController?.removeListener(_videoEndListener);
     
     try {
@@ -58,7 +58,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       final ip = await StorageService().getServerIp(); 
       final videoUrl = 'http://$ip:4000/library/movies/$movieId/stream?token=$token';
 
-      // Guarda os players antigos para destruí-los depois, mantendo a tela preta lisa
       final oldVideoController = _videoPlayerController;
       final oldChewieController = _chewieController;
 
@@ -66,7 +65,6 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       await _videoPlayerController!.initialize();
       await _videoPlayerController!.seekTo(Duration(seconds: offsetSeconds));
 
-      // 🌟 O NOVO ESPIÃO DA TV: Fica monitorando quando o programa vai acabar
       _videoPlayerController!.addListener(_videoEndListener);
 
       _chewieController = ChewieController(
@@ -76,13 +74,19 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
         showControls: false, 
       );
 
-      // Limpa os reprodutores antigos
       oldChewieController?.dispose();
       oldVideoController?.dispose();
 
       setState(() {
         _isLoading = false;
-        _isTransitioning = false;
+      });
+
+      Future.delayed(const Duration(seconds: 4), () {
+        if (mounted) {
+          setState(() {
+            _showOverlay = false;
+          });
+        }
       });
       
     } catch (e) {
@@ -94,30 +98,22 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
     }
   }
 
-  // 🌟 AÇÃO AO FIM DO VÍDEO
   void _videoEndListener() {
-    if (_videoPlayerController == null || !_videoPlayerController!.value.isInitialized || _isTransitioning) {
+    if (_videoPlayerController == null || !_videoPlayerController!.value.isInitialized) {
       return;
     }
 
     final position = _videoPlayerController!.value.position;
     final duration = _videoPlayerController!.value.duration;
 
-    // Se faltar 1 segundo para acabar...
     if (position > Duration.zero && position >= (duration - const Duration(seconds: 1))) {
-      _isTransitioning = true; 
       _videoPlayerController!.removeListener(_videoEndListener);
-      
-      // Sintoniza a TV novamente em segundo plano!
       _tuneIn(); 
     }
   }
 
   @override
   void dispose() {
-    SystemChrome.setPreferredOrientations([
-      DeviceOrientation.portraitUp,
-    ]);
     _videoPlayerController?.removeListener(_videoEndListener);
     _videoPlayerController?.dispose();
     _chewieController?.dispose();
@@ -146,67 +142,53 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
                           child: Chewie(controller: _chewieController!),
                         ),
 
-                        if (_showOverlay) ...[
+                        if (_showOverlay)
                           Positioned(
                             top: 0, left: 0, right: 0,
                             child: Container(
-                              height: 100,
+                              height: 110,
                               decoration: const BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.topCenter,
                                   end: Alignment.bottomCenter,
-                                  colors: [Colors.black87, Colors.transparent],
+                                  colors: [Colors.black, Colors.transparent],
                                 ),
                               ),
-                              child: SafeArea(
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 32),
-                                      onPressed: () => Navigator.of(context).pop(),
+                              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red,
+                                      borderRadius: BorderRadius.circular(4),
                                     ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Padding(
-                                        padding: const EdgeInsets.only(top: 8.0),
-                                        child: Text(
-                                          _currentTitle,
-                                          style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
+                                    child: const Text(
+                                      'AO VIVO', 
+                                      style: TextStyle(
+                                        color: Colors.white, 
+                                        fontWeight: FontWeight.bold, 
+                                        fontSize: 12,
                                       ),
                                     ),
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                      margin: const EdgeInsets.only(top: 8, right: 16),
-                                      decoration: BoxDecoration(
-                                        color: Colors.red,
-                                        borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      _currentTitle,
+                                      style: const TextStyle(
+                                        color: Colors.white, 
+                                        fontSize: 22, 
+                                        fontWeight: FontWeight.bold,
                                       ),
-                                      child: const Text('AO VIVO', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                                    )
-                                  ],
-                                ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
-                          
-                          Positioned(
-                            bottom: 40, right: 20,
-                            child: FloatingActionButton(
-                              backgroundColor: Colors.deepPurpleAccent.withValues(alpha: 0.8),
-                              onPressed: () {
-                                setState(() {
-                                  _isMuted = !_isMuted;
-                                  _videoPlayerController!.setVolume(_isMuted ? 0.0 : 1.0);
-                                });
-                              },
-                              child: Icon(_isMuted ? Icons.volume_off : Icons.volume_up, color: Colors.white),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                   )

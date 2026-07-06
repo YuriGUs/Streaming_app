@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/auth_service.dart'; 
 import '../services/storage_service.dart';
 import 'catalog.dart';
@@ -11,22 +12,63 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _ipController = TextEditingController(); // NOVO
+  final TextEditingController _ipController = TextEditingController(); 
   
+  // 📺 Variáveis para guardar os nós de foco do controle remoto
+  late FocusNode _ipFocus;
+  late FocusNode _usernameFocus;
+  late FocusNode _passwordFocus;
+  late FocusNode _loginButtonFocus;
+
   bool _isLoading = false;
   String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _loadSavedIp(); // NOVO: Busca o último IP usado para poupar o usuário
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    
+    // Inicializa os focos com a nossa função anti-bug da TV
+    _ipFocus = _createTvFocusNode();
+    _usernameFocus = _createTvFocusNode();
+    _passwordFocus = _createTvFocusNode();
+    _loginButtonFocus = _createTvFocusNode();
+
+    _loadSavedIp(); 
   }
 
-  // NOVO: Preenche o campo de IP automaticamente se houver um histórico
+  // 🌟 A MÁGICA DA TV: Intercepta a seta do controle e força o pulo do campo
+  FocusNode _createTvFocusNode() {
+    return FocusNode(
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent) {
+          // SE SETA PARA BAIXO: Pula para o próximo campo
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+            FocusScope.of(context).nextFocus();
+            return KeyEventResult.handled;
+          } 
+          // SE SETA PARA CIMA: Verifica se pode subir
+          else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+            // Se o foco já está no primeiro campo (IP), não faz nada.
+            // Se não, volta para o campo anterior.
+            if (node == _ipFocus) {
+              return KeyEventResult.ignored; // Fica preso no IP se for o primeiro
+            }
+            FocusScope.of(context).previousFocus();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+    );
+  }
+
   Future<void> _loadSavedIp() async {
     final savedIp = await StorageService().getServerIp();
     setState(() {
@@ -38,7 +80,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() { _errorMessage = null; });
     FocusScope.of(context).unfocus();
 
-    // Validação básica atualizada
     if (_usernameController.text.isEmpty || _passwordController.text.isEmpty || _ipController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Preencha usuário, senha e o IP do servidor!')),
@@ -46,13 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() { _isLoading = true; });
 
     try {
-      // 1. PRIMEIRA ETAPA: Salva o IP digitado no disco IMEDIATAMENTE.
-      // Assim, quando o AuthService for instanciado ali embaixo, ele já lerá o IP novo!
       await StorageService().saveServerIp(_ipController.text.trim());
 
       final authService = AuthService();
@@ -65,10 +102,7 @@ class _LoginScreenState extends State<LoginScreen> {
         await StorageService().saveToken(token);
         
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Login realizado com sucesso!'),
-            backgroundColor: Colors.green,
-          ),
+          const SnackBar(content: Text('Login realizado com sucesso!'), backgroundColor: Colors.green),
         );
         
         Navigator.of(context).pushReplacement(
@@ -83,9 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() { _isLoading = false; });
       }
     }
   }
@@ -94,109 +126,149 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
-    _ipController.dispose(); // NOVO
+    _ipController.dispose(); 
+    _ipFocus.dispose();
+    _usernameFocus.dispose();
+    _passwordFocus.dispose();
+    _loginButtonFocus.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Padding(
-              padding: const EdgeInsets.all(32.0),
-              child: Column(
+      backgroundColor: Colors.black,
+      body: Row(
+        children: [
+          Expanded(
+            flex: 5,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Colors.deepPurpleAccent.withOpacity(0.2), Colors.black],
+                ),
+              ),
+              child: const Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const Icon(Icons.movie_creation_rounded, size: 80, color: Colors.deepPurpleAccent),
-                  const SizedBox(height: 32),
-                  const Text(
-                    'Rust Streamer',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  // NOVO: Campo de texto para o IP do servidor
-                  TextField(
-                    controller: _ipController,
-                    keyboardType: TextInputType.url,
-                    decoration: const InputDecoration(
-                      labelText: 'IP do Servidor',
-                      hintText: 'Ex: 192.168.1.50',
-                      prefixIcon: Icon(Icons.dns_rounded),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  TextField(
-                    controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Usuário',
-                      prefixIcon: Icon(Icons.person),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Senha',
-                      prefixIcon: Icon(Icons.lock),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 32),
-                  
-                  if (_errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16.0),
-                      child: Text(
-                        _errorMessage!,
-                        style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    onPressed: _isLoading ? null : _handleLogin,
-                    child: _isLoading
-                        ? const SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('ENTRAR', style: TextStyle(fontSize: 16)),
-                  ),
-                  TextButton(
-                    onPressed: () async {
-                      // 👇 CORREÇÃO: Se o usuário digitou o IP, salvamos no disco antes de ir para o cadastro 👇
-                      if (_ipController.text.isNotEmpty) {
-                        await StorageService().saveServerIp(_ipController.text.trim());
-                      }
-                      
-                      if (mounted) {
-                        // Navega para a tela de registro por cima da atual
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                        );
-                      }
-                    },
-                    child: const Text('Não tem uma conta? Cadastre-se'),
-                  ),
+                  Icon(Icons.movie_creation_rounded, size: 120, color: Colors.deepPurpleAccent),
+                  SizedBox(height: 24),
+                  Text('Rust Streamer', style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold, color: Colors.white)),
+                  SizedBox(height: 16),
+                  Text('Sua TV, Suas Regras.', style: TextStyle(fontSize: 20, color: Colors.white54)),
                 ],
               ),
             ),
           ),
-        ),
+          
+          Expanded(
+            flex: 4,
+            child: Container(
+              color: Colors.grey[900], 
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 24.0),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Text(
+                        'Acessar Servidor',
+                        style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: Colors.white),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 40),
+                      
+                      TextField(
+                        controller: _ipController,
+                        focusNode: _ipFocus, // 📺 Vinculado
+                        autofocus: true,     // 📺 Já abre a tela focado aqui!
+                        textInputAction: TextInputAction.next,
+                        keyboardType: TextInputType.url,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'IP do Servidor',
+                          hintText: 'Ex: 192.168.1.50',
+                          prefixIcon: Icon(Icons.dns_rounded),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      TextField(
+                        controller: _usernameController,
+                        focusNode: _usernameFocus, // 📺 Vinculado
+                        textInputAction: TextInputAction.next,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Usuário',
+                          prefixIcon: Icon(Icons.person),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      
+                      TextField(
+                        controller: _passwordController,
+                        focusNode: _passwordFocus, // 📺 Vinculado
+                        textInputAction: TextInputAction.done,
+                        obscureText: true,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'Senha',
+                          prefixIcon: Icon(Icons.lock),
+                          border: OutlineInputBorder(),
+                        ),
+                        onSubmitted: (_) => _handleLogin(),
+                      ),
+                      const SizedBox(height: 32),
+                      
+                      if (_errorMessage != null)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: Text(
+                            _errorMessage!,
+                            style: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+
+                      ElevatedButton(
+                        focusNode: _loginButtonFocus, // 📺 Vinculado
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 20),
+                          backgroundColor: Colors.deepPurpleAccent,
+                          foregroundColor: Colors.white,
+                        ),
+                        onPressed: _isLoading ? null : _handleLogin,
+                        child: _isLoading
+                            ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('ENTRAR', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      TextButton(
+                        onPressed: () async {
+                          if (_ipController.text.isNotEmpty) {
+                            await StorageService().saveServerIp(_ipController.text.trim());
+                          }
+                          if (mounted) {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (context) => const RegisterScreen()),
+                            );
+                          }
+                        },
+                        child: const Text('Não tem uma conta? Cadastre-se', style: TextStyle(color: Colors.white70)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
