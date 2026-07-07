@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/movie.dart';
 import '../services/movie_service.dart';
 import '../services/storage_service.dart';
 import 'player.dart';
 import 'login.dart';
-
 import 'seasons.dart';
 import 'tv_player.dart';
 
@@ -21,22 +21,28 @@ class _CatalogScreenState extends State<CatalogScreen> {
   @override
   void initState() {
     super.initState();
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
     _loadData();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (context) => const TvPlayerScreen()),
+        );
+      }
+    });
   }
 
   void _loadData() {
     _initFuture = Future.wait([
       MovieService().getMovies(),
       StorageService().getToken(),
-      StorageService().getServerIp(), // 3º item: Busca o IP
+      StorageService().getServerIp(),
     ]);
-  }
-
-  Future<void> _refreshData() async {
-    setState(() {
-      _loadData();
-    });
-    await _initFuture;
   }
 
   @override
@@ -45,48 +51,61 @@ class _CatalogScreenState extends State<CatalogScreen> {
       length: 2,
       child: Scaffold(
         appBar: AppBar(
-          // 1. Centraliza o título
-          centerTitle: true,
-          title: const Text('Streaming'),
           backgroundColor: Colors.black87,
-          
-          // 2. Coloca o botão de Sair na esquerda (leading)
-          leading: IconButton(
-            icon: const Icon(Icons.logout, color: Color.fromARGB(255, 126, 27, 27), size: 23),
-            tooltip: 'Sair',
-            onPressed: () async {
-              await StorageService().deleteToken();
-              if (context.mounted) {
-                Navigator.of(context).pushReplacement(
-                  MaterialPageRoute(builder: (context) => const LoginScreen()),
-                );
-              }
-            },
-          ),
-          
-          // 3. Deixa apenas a TV Ao Vivo na direita (actions)
-          actions: [
-            Padding(
-              padding: const EdgeInsets.only(right: 8.0),
-              child: IconButton(
-                icon: const Icon(Icons.live_tv, color: Colors.deepPurpleAccent, size: 28),
-                tooltip: 'Assistir TV Ao Vivo',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const TvPlayerScreen(),
-                    ),
+          toolbarHeight: 80, 
+          // Botão Sair adaptado para Controle Remoto
+          leading: Center(
+            child: TvHeaderButton(
+              icon: Icons.logout,
+              color: Colors.redAccent,
+              onPressed: () async {
+                await StorageService().deleteToken();
+                if (context.mounted) {
+                  Navigator.of(context).pushReplacement(
+                    MaterialPageRoute(builder: (context) => const LoginScreen()),
                   );
-                },
+                }
+              },
+            ),
+          ),
+          title: const Text(
+            'Biblioteca', 
+            style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: Colors.white)
+          ),
+          centerTitle: true,
+          // Botão de TV Ao Vivo adaptado para Controle Remoto
+          actions: [
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 24.0),
+                child: TvHeaderButton(
+                  icon: Icons.live_tv,
+                  color: Colors.deepPurpleAccent,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (context) => const TvPlayerScreen()),
+                    );
+                  },
+                ),
               ),
             ),
           ],
-          bottom: const TabBar(
-            indicatorColor: Colors.deepPurpleAccent,
-            tabs: [
-              Tab(icon: Icon(Icons.movie), text: 'Filmes'),
-              Tab(icon: Icon(Icons.tv), text: 'Séries'),
-            ],
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(50),
+            child: Container(
+              color: Colors.black45,
+              child: const TabBar(
+                indicatorColor: Colors.deepPurpleAccent,
+                indicatorWeight: 4,
+                labelColor: Colors.white,
+                unselectedLabelColor: Colors.white38,
+                labelStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                tabs: [
+                  Tab(text: 'Filmes'),
+                  Tab(text: 'Séries'),
+                ],
+              ),
+            ),
           ),
         ),
         backgroundColor: Colors.grey[950],
@@ -94,7 +113,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
           future: _initFuture,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(child: CircularProgressIndicator(color: Colors.deepPurpleAccent));
             } else if (snapshot.hasError) {
               return Center(child: Text('Erro: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
             } else if (!snapshot.hasData) {
@@ -103,24 +122,11 @@ class _CatalogScreenState extends State<CatalogScreen> {
 
             final movies = snapshot.data![0] as List<Movie>;
             final token = snapshot.data![1] as String?; 
-            final ip = snapshot.data![2] as String;   // Pega o IP do Future.wait
+            final ip = snapshot.data![2] as String;   
 
             if (movies.isEmpty) {
-              // CORREÇÃO: Envolve a mensagem de lista vazia num ListView para permitir o Refresh
-              return RefreshIndicator(
-                onRefresh: _refreshData,
-                color: Colors.deepPurpleAccent,
-                child: ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: [
-                    SizedBox(
-                      height: MediaQuery.of(context).size.height * 0.7,
-                      child: const Center(
-                        child: Text('Nenhum vídeo na biblioteca. Puxe para atualizar!', style: TextStyle(color: Colors.white)),
-                      ),
-                    ),
-                  ],
-                ),
+              return const Center(
+                child: Text('Nenhum vídeo na biblioteca.', style: TextStyle(color: Colors.white, fontSize: 18)),
               );
             }
 
@@ -148,203 +154,232 @@ class _CatalogScreenState extends State<CatalogScreen> {
     );
   }
 
-  // --- MÉTODOS AUXILIARES ---
-
   Widget _buildFilmesGrid(List<Movie> filmes, String? token, String ip) {
     if (filmes.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refreshData,
-        color: Colors.deepPurpleAccent,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.5,
-            alignment: Alignment.center,
-            child: const Text('Nenhum filme encontrado.', style: TextStyle(color: Colors.white54)),
-          ),
-        ),
-      );
+      return const Center(child: Text('Nenhum filme encontrado.', style: TextStyle(color: Colors.white54, fontSize: 18)));
     }
-    
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      color: Colors.deepPurpleAccent,
-      child: GridView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.7,
-        ),
-        itemCount: filmes.length,
-        itemBuilder: (context, index) {
-          final movie = filmes[index];
-          return _buildCard(
-            title: movie.title,
-            thumbnailPath: movie.thumbnailPath,
-            token: token,
-            ip: ip, // Passa o IP pro cartão
-            onTap: () {
-               Navigator.of(context).push(
-                 MaterialPageRoute(
-                   builder: (context) => PlayerScreen(
-                     movieId: movie.id,
-                     title: movie.title,
-                     token: token!,
-                   ),
-                 ),
-               );
-            },
-          );
-        },
+    return GridView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(32), 
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6, 
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 24,
+        childAspectRatio: 0.7, 
       ),
+      itemCount: filmes.length,
+      itemBuilder: (context, index) {
+        final movie = filmes[index];
+        return TvFocusCard(
+          title: movie.title,
+          thumbnailPath: movie.thumbnailPath,
+          token: token,
+          ip: ip, 
+          onTap: () {
+             Navigator.of(context).push(
+               MaterialPageRoute(
+                 builder: (context) => PlayerScreen(
+                   movieId: movie.id.toInt(),
+                   title: movie.title,
+                   token: token!,
+                 ),
+               ),
+             );
+          },
+        );
+      },
     );
   }
 
   Widget _buildSeriesGrid(Map<String, List<Movie>> groupedSeries, String? token, String ip) {
     if (groupedSeries.isEmpty) {
-      return RefreshIndicator(
-        onRefresh: _refreshData,
-        color: Colors.deepPurpleAccent,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Container(
-            height: MediaQuery.of(context).size.height * 0.5,
-            alignment: Alignment.center,
-            child: const Text('Nenhuma série encontrada.', style: TextStyle(color: Colors.white54)),
-          ),
-        ),
-      );
+      return const Center(child: Text('Nenhuma série encontrada.', style: TextStyle(color: Colors.white54, fontSize: 18)));
     }
-    
-    final seriesNames = groupedSeries.keys.toList();
+    final seriesNames = groupedSeries.keys.toList()..sort();
 
-    seriesNames.sort((a, b) {
-      final regExp = RegExp(r'\d+');
-      final matchA = regExp.firstMatch(a);
-      final matchB = regExp.firstMatch(b);
+    return GridView.builder(
+      physics: const BouncingScrollPhysics(),
+      padding: const EdgeInsets.all(32), 
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 6, 
+        crossAxisSpacing: 24,
+        mainAxisSpacing: 24,
+        childAspectRatio: 0.7,
+      ),
+      itemCount: seriesNames.length,
+      itemBuilder: (context, index) {
+        final showName = seriesNames[index];
+        final episodes = groupedSeries[showName]!;
+        final firstEpisode = episodes.first;
 
-      if (matchA != null && matchB != null) {
-        final numA = int.parse(matchA.group(0)!);
-        final numB = int.parse(matchB.group(0)!);
-        
-        if (numA != numB) {
-          return numA.compareTo(numB); 
-        }
-      }
-      return a.compareTo(b);
-    });
-
-    return RefreshIndicator(
-      onRefresh: _refreshData,
-      color: Colors.deepPurpleAccent,
-      child: GridView.builder(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.all(16),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          childAspectRatio: 0.7,
-        ),
-        itemCount: seriesNames.length,
-        itemBuilder: (context, index) {
-          final showName = seriesNames[index];
-          final episodes = groupedSeries[showName]!;
-          final firstEpisode = episodes.first;
-
-          return _buildCard(
-            title: showName, 
-            thumbnailPath: firstEpisode.thumbnailPath,
-            token: token,
-            ip: ip, // Passa o IP pro cartão
-            isSerie: true,
-            episodeCount: episodes.length,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (context) => SeasonsScreen( 
-                    showTitle: showName,
-                    episodes: episodes,
-                    token: token!,
-                    ip: ip,
-                  ),
+        return TvFocusCard(
+          title: showName, 
+          thumbnailPath: firstEpisode.thumbnailPath,
+          token: token,
+          ip: ip,
+          isSerie: true,
+          episodeCount: episodes.length,
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) => SeasonsScreen( 
+                  showTitle: showName,
+                  episodes: episodes,
+                  token: token!,
+                  ip: ip,
                 ),
-              );
-            },
-          );
-        },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+// Botão customizado para o Topo da TV que acende ao focar
+class TvHeaderButton extends StatefulWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onPressed;
+
+  const TvHeaderButton({Key? key, required this.icon, required this.color, required this.onPressed}) : super(key: key);
+
+  @override
+  State<TvHeaderButton> createState() => _TvHeaderButtonState();
+}
+
+class _TvHeaderButtonState extends State<TvHeaderButton> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (focus) => setState(() => _isFocused = focus),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent && (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter)) {
+          widget.onPressed();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: _isFocused ? widget.color.withOpacity(0.3) : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: _isFocused ? widget.color : Colors.transparent, width: 2),
+        ),
+        child: Icon(widget.icon, color: _isFocused ? Colors.white : widget.color, size: 32),
       ),
     );
   }
+}
 
-  Widget _buildCard({
-    required String title,
-    String? thumbnailPath,
-    String? token,
-    required String ip, // Recebe o IP como parâmetro obrigatório aqui
-    bool isSerie = false,
-    int episodeCount = 0,
-    required VoidCallback onTap,
-  }) {
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 4,
-      child: InkWell(
-        onTap: onTap,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Container(color: Colors.grey[900]),
-            if (thumbnailPath != null && token != null)
-              Image.network(
-                'http://$ip:4000/library/movies/${thumbnailPath.split('/').last.split('.').first}/thumbnail', // Usa a variável ip aqui
-                headers: {'Authorization': 'Bearer $token'},
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, color: Colors.white24, size: 50)),
-              )
-            else
-              const Center(child: Icon(Icons.movie, size: 50, color: Colors.white24)),
-            
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [Colors.black87, Colors.transparent],
+class TvFocusCard extends StatefulWidget {
+  final String title;
+  final String? thumbnailPath;
+  final String? token;
+  final String ip;
+  final bool isSerie;
+  final int episodeCount;
+  final VoidCallback onTap;
+
+  const TvFocusCard({
+    Key? key,
+    required this.title,
+    this.thumbnailPath,
+    this.token,
+    required this.ip,
+    this.isSerie = false,
+    this.episodeCount = 0,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  State<TvFocusCard> createState() => _TvFocusCardState();
+}
+
+class _TvFocusCardState extends State<TvFocusCard> {
+  bool _isFocused = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Focus(
+      onFocusChange: (focus) => setState(() => _isFocused = focus),
+      onKeyEvent: (node, event) {
+        if (event is KeyDownEvent && (event.logicalKey == LogicalKeyboardKey.select || event.logicalKey == LogicalKeyboardKey.enter)) {
+          widget.onTap();
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        transform: Matrix4.identity()..scale(_isFocused ? 1.06 : 1.0),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _isFocused ? Colors.white : Colors.transparent, width: 3),
+          boxShadow: _isFocused
+              ? [BoxShadow(color: Colors.deepPurpleAccent.withOpacity(0.6), blurRadius: 16, spreadRadius: 2)]
+              : [],
+        ),
+          child: Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          color: Colors.grey[900],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          child: InkWell(
+            onTap: widget.onTap,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (widget.thumbnailPath != null && widget.token != null)
+                  Image.network(
+                    'http://${widget.ip}:4000/library/movies/${widget.thumbnailPath!.split('/').last.split('.').first}/thumbnail',
+                    headers: {'Authorization': 'Bearer ${widget.token}'},
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => const Center(child: Icon(Icons.broken_image, color: Colors.white24, size: 40)),
+                  )
+                else
+                  const Center(child: Icon(Icons.movie, size: 40, color: Colors.white24)),
+                Positioned(
+                  bottom: 0, left: 0, right: 0,
+                  child: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [Colors.black, Colors.transparent],
+                      ),
+                    ),
+                    padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
-                padding: const EdgeInsets.fromLTRB(8, 24, 8, 8),
-                child: Text(
-                  title,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: Colors.white),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
+                if (widget.isSerie)
+                  Positioned(
+                    top: 8, right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(color: Colors.deepPurpleAccent, borderRadius: BorderRadius.circular(4)),
+                      child: Text(
+                        '${widget.episodeCount} EPs',
+                        style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            
-            if (isSerie)
-              Positioned(
-                top: 8, right: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.deepPurpleAccent,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '$episodeCount EPs',
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
