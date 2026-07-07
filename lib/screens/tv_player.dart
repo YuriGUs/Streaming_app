@@ -42,10 +42,16 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       final movieId = tvData['movie_id'];
       final offsetSeconds = tvData['offset_seconds'];
 
+      // SE ESTIVER FORA DO AR, TENTA DE NOVO EM 5 SEGUNDOS
       if (movieId == 0) {
         setState(() {
-          _currentTitle = "Fora do ar";
+          _currentTitle = "Fora do ar - Procurando sinal...";
           _isLoading = false;
+        });
+        
+        // Aguarda 5 segundos e tenta sintonizar novamente!
+        Future.delayed(const Duration(seconds: 5), () {
+          if (mounted) _tuneIn();
         });
         return; 
       }
@@ -90,11 +96,17 @@ class _TvPlayerScreenState extends State<TvPlayerScreen> {
       });
       
     } catch (e) {
+      // 📺 SE ACONTECER UM ERRO DE REDE, TAMBÉM TENTA DE NOVO
       setState(() {
-        _currentTitle = "Erro ao sintonizar";
+        _currentTitle = "Sem conexão. Tentando novamente...";
         _isLoading = false;
       });
       print(e);
+      
+      // Aguarda 5 segundos e tenta de novo
+      Future.delayed(const Duration(seconds: 5), () {
+        if (mounted) _tuneIn();
+      });
     }
   }
 
